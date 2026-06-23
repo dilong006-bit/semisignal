@@ -4,17 +4,25 @@
 import { useEffect, useState } from "react";
 import type { CompanyProfile, TopicKey } from "../lib/types";
 import { loadProfile } from "../lib/storage";
+import { isSupabaseConfigured } from "../lib/supabase";
 import { useBriefing } from "../hooks/useBriefing";
+import { usePublishBriefings } from "../hooks/usePublishBriefings";
+import { useAuth } from "../contexts/AuthContext";
 import { CompanyProfileForm } from "./CompanyProfileForm";
 import { TopicSelector } from "./TopicSelector";
 import { StatusIndicator } from "./StatusIndicator";
 import { BriefingResults } from "./BriefingResults";
+import { PublishBar } from "./PublishBar";
 
 export function BriefingStudio() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [editingProfile, setEditingProfile] = useState(true);
   const [topics, setTopics] = useState<TopicKey[]>([]);
   const briefing = useBriefing();
+
+  // 발행(작업 A): 편집자 id 로 briefings INSERT. 권한은 RLS 가 강제.
+  const { profile: authProfile } = useAuth();
+  const publish = usePublishBriefings(authProfile?.id ?? null);
 
   useEffect(() => {
     const saved = loadProfile();
@@ -71,10 +79,28 @@ export function BriefingStudio() {
         failedTopics={briefing.failedTopics}
       />
 
+      {publish.error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {publish.error}
+        </div>
+      )}
+
       <BriefingResults
         briefing={briefing.briefing}
         articles={briefing.articles}
         llmFailed={briefing.llmFailed}
+        cardFooter={(item, i) => {
+          const key = `${i}-${item.topic}`;
+          return (
+            <PublishBar
+              published={Boolean(publish.published[key])}
+              busy={Boolean(publish.busy[key])}
+              configured={isSupabaseConfigured}
+              onPublish={() => void publish.publish(key, item)}
+              onUnpublish={() => void publish.unpublish(key)}
+            />
+          );
+        }}
       />
     </div>
   );

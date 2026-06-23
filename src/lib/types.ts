@@ -13,6 +13,28 @@ export interface Profile {
   created_at?: string;
 }
 
+/** briefings 테이블 행(TECH_SPEC 3절). category 는 TopicKey 를 text 로 저장. */
+export interface DbBriefing {
+  id: string;
+  editor_id: string | null;
+  title: string;
+  source: string | null;
+  category: string;
+  summary: string | null;
+  lens: string; // "우리 회사에 주는 의미"(편집자 검수본)
+  published_at: string;
+}
+
+/** reactions 테이블 행(TECH_SPEC 3절). 피드백 루프 핵심. */
+export interface DbReaction {
+  id: string;
+  briefing_id: string;
+  reader_id: string;
+  saved: boolean;
+  liked: boolean;
+  updated_at: string;
+}
+
 /** 관심 주제 영역 키 (FR-2). */
 export type TopicKey = "ai_ax" | "edu_trend" | "k12" | "higher_edu";
 

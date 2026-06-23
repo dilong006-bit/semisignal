@@ -1,12 +1,15 @@
 // 주제별 브리핑 카드 한 장(FR-5). 헤드라인 + 3줄 요약 + 회사 함의 + 근거 링크.
+import type { ReactNode } from "react";
 import type { BriefingItem } from "../lib/types";
 import { TOPICS } from "../lib/types";
 
 interface Props {
   item: BriefingItem;
+  /** 편집자 발행 컨트롤 등 카드 하단 슬롯(옵션). */
+  footer?: ReactNode;
 }
 
-export function BriefingCard({ item }: Props) {
+export function BriefingCard({ item, footer }: Props) {
   const label = TOPICS.find((t) => t.key === item.topic)?.label ?? item.topic;
 
   return (
@@ -60,6 +63,8 @@ export function BriefingCard({ item }: Props) {
           </ul>
         </div>
       )}
+
+      {footer && <div className="mt-4 border-t border-slate-100 pt-4">{footer}</div>}
     </article>
   );
 }

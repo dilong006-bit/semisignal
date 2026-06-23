@@ -1,5 +1,6 @@
 // 카드 목록 컨테이너(FR-5). BriefingItem[] 을 주제별 카드로 렌더.
 // LLM 실패 시 수집 기사 목록만이라도 노출(FR-7 부분 성공).
+import type { ReactNode } from "react";
 import type { Article, BriefingItem } from "../lib/types";
 import { BriefingCard } from "./BriefingCard";
 import { ExportButton } from "./ExportButton";
@@ -8,9 +9,16 @@ interface Props {
   briefing: BriefingItem[];
   articles: Article[];
   llmFailed: boolean;
+  /** 카드별 하단 슬롯(편집자 발행 컨트롤 주입용, 옵션). */
+  cardFooter?: (item: BriefingItem, index: number) => ReactNode;
 }
 
-export function BriefingResults({ briefing, articles, llmFailed }: Props) {
+export function BriefingResults({
+  briefing,
+  articles,
+  llmFailed,
+  cardFooter,
+}: Props) {
   // 정상 결과
   if (briefing.length > 0) {
     return (
@@ -21,7 +29,11 @@ export function BriefingResults({ briefing, articles, llmFailed }: Props) {
         </div>
         <div className="grid grid-cols-1 gap-4">
           {briefing.map((item, i) => (
-            <BriefingCard key={`${item.topic}-${i}`} item={item} />
+            <BriefingCard
+              key={`${item.topic}-${i}`}
+              item={item}
+              footer={cardFooter?.(item, i)}
+            />
           ))}
         </div>
       </section>
