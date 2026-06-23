@@ -147,7 +147,7 @@ async function callOnce(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": API_KEY,
+        "x-api-key": API_KEY ?? "",
         "anthropic-version": "2023-06-01",
         // 브라우저에서 직접(프록시 경유) 호출을 허용하는 헤더. 로컬 학습용.
         "anthropic-dangerous-direct-browser-access": "true",

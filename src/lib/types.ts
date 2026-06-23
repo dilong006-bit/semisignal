@@ -1,6 +1,18 @@
 // 코어 수준의 타입 계약(10절). 필드명은 고정, 타입은 명세서를 따른다.
 // 컴포넌트·서비스·훅은 이 파일의 타입만 공유한다.
 
+// ── Phase 1: 역할 기반 회원관리 ──────────────────────────────────────────
+/** 사용자 역할. 권한의 최종 강제는 Supabase RLS, 프론트 분기는 UX. */
+export type Role = "editor" | "reader";
+
+/** profiles 테이블 행(TECH_SPEC 3절). */
+export interface Profile {
+  id: string;
+  email: string | null;
+  role: Role;
+  created_at?: string;
+}
+
 /** 관심 주제 영역 키 (FR-2). */
 export type TopicKey = "ai_ax" | "edu_trend" | "k12" | "higher_edu";
 
