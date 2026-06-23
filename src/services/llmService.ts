@@ -1,16 +1,11 @@
-// LLM 재해석 서비스(FR-4, RAG 3단계). Anthropic Claude API 호출 + JSON 파싱.
-// 외부 도메인 대신 /api/llm 프록시 경로로 호출한다(CORS 회피, 11-3절).
-//
-// ⚠️ 배포 경계(명세 11-2/11-3): 이 호출은 로컬 학습용이다. 키를 브라우저에 노출하는
-// 구조이므로 실제 배포에서는 서버리스 프록시로 교체해야 한다(17절 확장). 그때
-// 이 파일 내부만 바꾸면 되도록 호출부(useBriefing)와 분리해 둔다.
+// LLM 재해석 서비스(FR-4, RAG 3단계). JSON 파싱.
+// 작업 D: 외부 호출은 /api/llm 서버리스 함수가 담당한다. 키·모델은 서버가 가지며
+// 클라이언트는 키를 모른다(가드레일: 키 클라이언트 노출 금지). 여기서는 system·messages
+// 만 보내고, 서버가 반환한 Anthropic 원응답을 기존 그대로 파싱한다.
 import type { Article, BriefingItem, CompanyProfile, TopicKey } from "../lib/types";
 import { TOPICS } from "../lib/types";
 
-const LLM_PROXY_URL = "/api/llm/v1/messages";
-const DEFAULT_MODEL = "claude-opus-4-8";
-const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
-const MODEL = import.meta.env.VITE_ANTHROPIC_MODEL || DEFAULT_MODEL;
+const LLM_ENDPOINT = "/api/llm";
 
 export class LlmError extends Error {
   constructor(message: string) {
@@ -143,17 +138,11 @@ async function callOnce(
 ): Promise<BriefingItem[]> {
   let res: Response;
   try {
-    res = await fetch(LLM_PROXY_URL, {
+    // 키·모델은 서버(/api/llm)가 결정한다. 클라이언트는 system·messages 만 전달.
+    res = await fetch(LLM_ENDPOINT, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": API_KEY ?? "",
-        "anthropic-version": "2023-06-01",
-        // 브라우저에서 직접(프록시 경유) 호출을 허용하는 헤더. 로컬 학습용.
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        model: MODEL,
         max_tokens: 4096,
         system,
         messages: [{ role: "user", content: user }],
@@ -198,12 +187,6 @@ export async function summarizeBriefing(
   profile: CompanyProfile,
   topics: TopicKey[],
 ): Promise<BriefingItem[]> {
-  if (!API_KEY) {
-    throw new LlmError(
-      "VITE_ANTHROPIC_API_KEY 가 설정되지 않았습니다. .env 파일을 확인하세요.",
-    );
-  }
-
   const system = buildSystemPrompt(profile);
   const user = buildUserPrompt(articles, topics);
 

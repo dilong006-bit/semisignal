@@ -1,10 +1,7 @@
-// 뉴스 수집 서비스(FR-3, RAG 1단계). Google News RSS 호출 + DOMParser XML 파싱.
-// 외부 도메인 대신 /api/news 프록시 경로로 호출한다(CORS 회피, 6/11-3절).
-import { buildNewsRssPath, type Locale } from "../lib/queries";
+// 뉴스 수집 서비스(FR-3, RAG 1단계). 서버리스(/api/news)가 RSS 를 프록시하고,
+// XML 파싱·Article 매핑은 브라우저 DOMParser 로 여기서 한다(작업 D-2: 파싱은 클라이언트 유지).
+import type { Locale } from "../lib/queries";
 import type { Article, TopicKey } from "../lib/types";
-
-/** Vite dev proxy 프리픽스. /api/news -> https://news.google.com */
-const NEWS_PROXY_PREFIX = "/api/news";
 
 /** 주제별 LLM 전달 기사 상한(9절: 비용·지연 관리). */
 const MAX_ARTICLES_PER_TOPIC = 10;
@@ -65,7 +62,8 @@ export async function fetchArticlesForTopic(
   topic: TopicKey,
   locale: Locale = "ko",
 ): Promise<Article[]> {
-  const url = `${NEWS_PROXY_PREFIX}${buildNewsRssPath(topic, locale)}`;
+  // 서버가 topic·locale 로 RSS 경로를 구성한다(쿼리 빌드 단일 소스는 lib/queries).
+  const url = `/api/news?topic=${encodeURIComponent(topic)}&locale=${locale}`;
 
   let res: Response;
   try {

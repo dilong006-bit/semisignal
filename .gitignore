@@ -8,6 +8,9 @@ dist
 dist-ssr
 *.local
 
+# vercel (vercel dev/link 가 만드는 로컬 프로젝트·org ID — 커밋 금지)
+.vercel
+
 # env — 실제 키가 들어가는 파일은 절대 커밋하지 않는다
 .env
 .env.*
