@@ -98,7 +98,7 @@ npm install
 
 ### 2. 환경변수 설정
 
-`.env.example`을 복사해 `.env`를 만들고 Anthropic API 키를 입력합니다.
+`.env.example`을 복사해 `.env`를 채웁니다.
 
 ```bash
 cp .env.example .env
@@ -106,18 +106,33 @@ cp .env.example .env
 
 ```env
 # .env
-VITE_ANTHROPIC_API_KEY=sk-ant-실제-키
-VITE_ANTHROPIC_MODEL=claude-opus-4-8   # (선택) 미지정 시 기본값
+# 프론트(빌드타임, 번들 포함 — anon 키는 RLS 로 보호되어 공개 가능)
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<supabase-anon-public-key>
+
+# 서버리스 전용(런타임 · 절대 VITE_ 금지 — api/llm 이 사용)
+ANTHROPIC_API_KEY=sk-ant-<server-only-key>
+ANTHROPIC_MODEL=claude-opus-4-8   # (선택) 미지정 시 기본값
 ```
 
-> ⚠️ **`.env`는 절대 커밋하지 마세요.** `.gitignore`에 포함되어 있습니다. 실제 키는 로컬에만 두고, 공개 저장소에는 `.env.example`만 올립니다. 이 구조는 로컬 학습용이며, 실제 배포 시에는 키가 브라우저에 노출되지 않도록 서버리스 함수(프록시)로 전환해야 합니다.
+> ⚠️ **`.env`는 절대 커밋하지 마세요.** `.gitignore`에 포함되어 있습니다. 외부 API 키(`ANTHROPIC_API_KEY`)는 `VITE_` 접두사 없이 두어 **브라우저 번들에 포함되지 않습니다** — `/api/*` 서버리스 함수에서만 사용합니다.
 
 ### 3. 개발 서버 실행
 
 ```bash
-npm run dev                 # 기본 포트(5173)
-npm run dev -- --port 5151  # 포트 지정
+npm run dev                 # 정적 SPA 만 (서버리스 /api/* 제외)
 ```
+
+> ⚠️ `npm run dev`(Vite)는 정적 SPA 만 띄우므로 `/api/llm`·`/api/news` 는 404 입니다.
+> 서버리스 함수까지 로컬에서 함께 띄우려면 **Vercel CLI** 를 사용합니다:
+>
+> ```bash
+> npm i -g vercel      # 최초 1회
+> vercel login         # 최초 1회
+> vercel dev           # SPA + /api/* 를 한 서버에서 실행
+> ```
+>
+> `vercel dev` 는 `.env` 의 `ANTHROPIC_API_KEY`·`ANTHROPIC_MODEL` 을 함수 런타임에 주입합니다.
 
 ### 4. 프로덕션 빌드
 
@@ -128,14 +143,16 @@ npm run preview  # 빌드 결과 미리보기
 
 ---
 
-## CORS / dev proxy
+## 외부 호출 — 서버리스 프록시
 
-브라우저에서 Google News RSS와 Anthropic API를 직접 호출하면 CORS에 막힙니다. `vite.config.ts`의 `server.proxy`로 우회합니다.
+외부 API 키를 브라우저에 노출하지 않기 위해, 외부 호출은 전부 `/api/*` 서버리스 함수가 담당합니다.
 
-- `/api/news` → `https://news.google.com`
-- `/api/llm` → `https://api.anthropic.com`
+| 함수 | 역할 |
+|---|---|
+| [api/llm.ts](api/llm.ts) | `system·messages` 받아 서버 `ANTHROPIC_API_KEY` 로 Anthropic 호출 → 원응답 그대로 반환(모델은 서버 결정) |
+| [api/news.ts](api/news.ts) | `topic·locale` 로 Google News RSS 를 서버에서 fetch → XML 텍스트만 프록시(파싱은 클라이언트 DOMParser) |
 
-코드에서는 절대경로(외부 도메인) 대신 상대 프록시 경로(`/api/...`)로만 호출합니다.
+클라이언트(`llmService`·`newsService`)는 외부 도메인 대신 `/api/llm`·`/api/news` 만 호출하며, 키를 알지 못합니다.
 
 ---
 
@@ -159,12 +176,59 @@ npm run preview  # 빌드 결과 미리보기
 
 **수정:** 업종 입력을 **규모 필드와 동일한 단일선택 칩**으로 교체했습니다. 이제 다른 칩을 한 번 클릭하면 즉시 변경됩니다. 데이터 계약(`industry: string`)·저장·LLM 프롬프트는 그대로 유지해 영향 범위를 `CompanyProfileForm.tsx`의 업종 입력부 한 곳으로 한정했고, `aria-pressed`로 접근성을 보강했습니다.
 
+### Phase 1 — 역할 기반 회원관리 + 피드백 루프 (Supabase + Vercel)
+
+- **마일스톤 1~3** — Supabase 스키마/RLS(`profiles`·`briefings`·`reactions`), Editor/Reader 인증·역할(`AuthContext`), 라우트 가드(`RequireAuth`/`RequireRole`)
+- **작업 A — 편집자 발행** — 초안(`BriefingItem`)을 검수 후 `briefings` INSERT/DELETE(LLM 자동발행 금지). 권한은 RLS 강제
+- **작업 B — 독자 피드 + 반응** — `briefings` 열람 + 카테고리 필터, `reactions` 저장/좋아요 upsert(낙관적 업데이트 + 롤백)
+- **작업 C — 신호 대시보드** — `briefing_signals` 뷰 집계로 "발행→반응→신호" 피드백 루프 완성
+- **작업 D — 서버리스 키 이전** — 외부 호출을 `api/llm`·`api/news` 서버리스로 이전해 키를 서버사이드로 숨김. dist 번들에 키 흔적 0건 검증
+- **작업 E — Vercel 배포 정리** — `vite base` 를 `/` 로, SPA fallback `vercel.json` 추가, 중복되던 GitHub Pages 워크플로(`deploy.yml`) 제거
+
 ---
 
-## 범위 밖 (이번 버전 제외)
+## 배포 (Vercel)
 
-사용자 인증·회원 시스템 / 서버 DB / 결제 / 실제 공개 배포 / 이메일·푸시 알림 / 다국어 i18n / 사용자별 클라우드 저장. (확장 로드맵 항목)
+GitHub `main` 에 push 하면 Vercel 이 자동으로 빌드·배포합니다. 아래 콘솔 작업은 직접 수행합니다.
+
+### 1. 환경변수 (Vercel → Project Settings → Environment Variables)
+
+| 변수 | 구분 | 값 |
+|---|---|---|
+| `VITE_SUPABASE_URL` | 프론트(빌드타임·번들 포함) | Supabase Project URL |
+| `VITE_SUPABASE_ANON_KEY` | 프론트(빌드타임·번들 포함) | Supabase anon public 키 (RLS 보호) |
+| `ANTHROPIC_API_KEY` | **서버리스(런타임 전용·절대 VITE_ 금지)** | `sk-ant-...` |
+| `ANTHROPIC_MODEL` | 서버리스(선택) | 미지정 시 `claude-opus-4-8` |
+
+> `SUPABASE_SERVICE_ROLE_KEY`·`NEWS_API_KEY` 는 현재 코드가 사용하지 않으므로 **등록 불필요**.
+
+### 2. Vercel 연결 (GitHub Import)
+
+Vercel 대시보드 → **Add New → Project** → `dilong006-bit/semisignal` **Import** → 위 환경변수 등록 → **Deploy**.
+
+- Framework: **Vite**(자동감지) · Build: `npm run build` · Output: `dist`
+- `/api/*` 는 Vercel 이 서버리스 함수로 자동 등록(`api/llm`·`api/news`)
+- ⚠️ 로컬에서 실행한 `vercel dev`/`vercel link`(루트 `.vercel/`)는 **로컬 테스트용**입니다. 실제 자동배포는 이 **GitHub Import 연결**이 담당합니다.
+
+### 3. Supabase Auth redirect URL 등록
+
+Supabase 콘솔 → **Authentication → URL Configuration** 에 **배포 도메인**을 등록합니다.
+
+- **Site URL**: `https://<your-app>.vercel.app`
+- **Redirect URLs**: `https://<your-app>.vercel.app/**`
+
+> 코드의 `redirectUrl()` 은 `window.location.origin` 기반이라 자동 대응하지만, 콘솔 allowlist 에 등록하지 않으면 매직링크·Google 로그인이 `localhost` 로 튀거나 거부됩니다.
+
+### 4. 자동배포 흐름
+
+`main` 에 push → Vercel 자동 빌드·배포. PR 브랜치는 Preview 배포가 생성됩니다.
 
 ---
 
-*로컬 학습용 프로토타입입니다. 실제 배포 시 API 키 보호(서버리스 프록시 전환)가 선행되어야 합니다.*
+## 범위 밖 (다음 단계)
+
+Slack 연동 / 데일리 마이크로 브리핑 / 다중 워크스페이스 / SSO / 결제 / VM vs Serverless 비교 실습(Phase 2). (로드맵 항목)
+
+---
+
+*Phase 1: 역할 기반 회원관리 + 피드백 루프. 외부 키는 서버리스(`/api/*`)에서만 사용되며 브라우저에 노출되지 않습니다.*
