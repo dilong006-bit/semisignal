@@ -35,6 +35,20 @@ export interface DbReaction {
   updated_at: string;
 }
 
+/**
+ * briefing_signals 뷰 행(작업 C). 브리핑 1건당 1행(카테고리별이 아님).
+ * 카테고리 집계는 클라이언트에서 category 기준으로 합산한다.
+ */
+export interface BriefingSignalRow {
+  briefing_id: string;
+  title: string;
+  category: string;
+  published_at: string;
+  likes: number;
+  saves: number;
+  readers_reacted: number;
+}
+
 /** 관심 주제 영역 키 (FR-2). */
 export type TopicKey = "ai_ax" | "edu_trend" | "k12" | "higher_edu";
 
